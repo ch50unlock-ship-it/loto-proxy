@@ -139,3 +139,27 @@ app.get("/status",(req,res)=>{
 app.listen(process.env.PORT || 3000, ()=>{
  console.log("🚀 LOTO PRO SERVER READY");
 });
+app.get("/test/:date", async (req,res)=>{
+
+ let fecha = req.params.date;
+
+ console.log("🧪 TEST FECHA:", fecha);
+
+ let data = {
+  diaria: await diaria(),
+  premia2: await premia2(),
+  juega3: await juega3()
+ };
+
+ cache.fechas[fecha] = {
+  fecha,
+  data
+ };
+
+ res.json({
+  ok:true,
+  fecha,
+  data
+ });
+
+});
