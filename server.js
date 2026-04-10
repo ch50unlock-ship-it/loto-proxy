@@ -7,12 +7,17 @@ app.get("/resultado", async (req, res) => {
   let r = await fetch("https://loterianacional.com.ni/");
   let html = await r.text();
 
-  let match = html.match(/\d{2,3}/);
-  let numero = match ? match[0] : "00";
+  // 🔥 busca números más específicos (2 o 3 dígitos aislados)
+  let matches = html.match(/\b\d{2,3}\b/g);
 
-  res.json({
-   numero
-  });
+  let numero = "00";
+
+  if(matches && matches.length > 0){
+    // toma uno de los últimos (más probable resultado reciente)
+    numero = matches[matches.length - 1];
+  }
+
+  res.json({ numero });
 
  } catch (e) {
   res.json({ numero: "00" });
