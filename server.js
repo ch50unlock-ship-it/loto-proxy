@@ -4,23 +4,27 @@ const app = express();
 
 app.get("/resultado", async (req, res) => {
  try {
-  let r = await fetch("https://loterianacional.com.ni/");
+  let r = await fetch("https://loto.com.ni/diaria/");
   let html = await r.text();
 
-  // 🔥 busca números más específicos (2 o 3 dígitos aislados)
-  let matches = html.match(/\b\d{2,3}\b/g);
+  // 🔥 Buscar patrón tipo "67 x5"
+  let match = html.match(/(\d{2})\s*x\s*(\d)/i);
 
   let numero = "00";
+  let multi = "1";
 
-  if(matches && matches.length > 0){
-    // toma uno de los últimos (más probable resultado reciente)
-    numero = matches[matches.length - 1];
+  if(match){
+    numero = match[1];
+    multi = match[2];
   }
 
-  res.json({ numero });
+  res.json({
+   numero,
+   multiplicador: multi
+  });
 
  } catch (e) {
-  res.json({ numero: "00" });
+  res.json({ numero: "00", multiplicador: "1" });
  }
 });
 
