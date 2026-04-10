@@ -1,31 +1,22 @@
 const express = require("express");
-const fetch = require("node-fetch");
+const cors = require("cors");
+
 const app = express();
 
-app.get("/resultado", async (req, res) => {
- try {
-  let r = await fetch("https://loto.com.ni/diaria/");
-  let html = await r.text();
+// 🔥 IMPORTANTE PARA FRONTEND
+app.use(cors({ origin: "*" }));
 
-  // 🔥 Buscar patrón tipo "67 x5"
-  let match = html.match(/(\d{2})\s*x\s*(\d)/i);
-
-  let numero = "00";
-  let multi = "1";
-
-  if(match){
-    numero = match[1];
-    multi = match[2];
-  }
+app.get("/resultado", (req, res) => {
+  const numero = Math.floor(Math.random() * 100).toString().padStart(2, "0");
+  const multiplicador = (Math.random() * 5).toFixed(1);
 
   res.json({
-   numero,
-   multiplicador: multi
+    numero,
+    multiplicador
   });
-
- } catch (e) {
-  res.json({ numero: "00", multiplicador: "1" });
- }
 });
 
-app.listen(3000, () => console.log("Servidor activo"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("Servidor corriendo en puerto", PORT);
+});
