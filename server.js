@@ -111,3 +111,4 @@ app.get("/status",(req,res)=>{
 app.listen(process.env.PORT || 3000, ()=>{
  console.log("🚀 LOTO SERVER ON");
 });
+actualizar();
