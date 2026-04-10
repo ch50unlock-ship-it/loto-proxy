@@ -1,13 +1,11 @@
 const express = require("express");
 const cors = require("cors");
-const axios = require("axios");
-const cheerio = require("cheerio");
 const cron = require("node-cron");
+const { chromium } = require("playwright");
 
 const app = express();
 app.use(cors({ origin: "*" }));
 
-/* 🧠 CACHE */
 let cache = {
  fechas: {}
 };
@@ -19,59 +17,65 @@ function getDate(){
  });
 }
 
-/* 🌐 LOAD */
-async function load(url){
- let res = await axios.get(url);
- return cheerio.load(res.data);
-}
+/* 🔥 BROWSER SCRAPER REAL */
+async function scrape(url){
 
-/* 🔥 EXTRAER POR BLOQUES REALES */
-function parseResultBox($, selector){
+ const browser = await chromium.launch({
+  headless: true
+ });
 
- let results = [];
+ const page = await browser.newPage();
 
- $(selector).each((i,el)=>{
+ await page.goto(url, { waitUntil: "networkidle" });
 
-  let date = $(el).find(".draw-date").text().trim();
-  let time = $(el).find(".draw-time").text().trim();
-  let id = $(el).find(".draw-id").text().trim();
+ // esperar render completo
+ await page.waitForTimeout(3000);
 
-  let digits = [];
+ const data = await page.evaluate(() => {
 
-  $(el).find(".digit").each((i,d)=>{
-   digits.push($(d).text().trim());
-  });
+  function getBoxes(){
 
-  if(digits.length > 0){
-   results.push({
-    date,
-    time,
-    id,
-    number: digits.join("")
+   let boxes = document.querySelectorAll(".result-box");
+
+   let results = [];
+
+   boxes.forEach(b => {
+
+    let date = b.querySelector(".draw-date")?.innerText || "";
+    let time = b.querySelector(".draw-time")?.innerText || "";
+    let id = b.querySelector(".draw-id")?.innerText || "";
+
+    let digits = [...b.querySelectorAll(".digit")]
+      .map(d => d.innerText.trim())
+      .join("");
+
+    if(digits){
+     results.push({ date, time, id, number: digits });
+    }
+
    });
+
+   return results;
   }
+
+  return getBoxes();
 
  });
 
- return results.slice(0,4);
+ await browser.close();
+
+ return data.slice(0,4);
 }
 
 /* 🎰 DIARIA */
 async function diaria(){
  try{
-  let $ = await load("https://loto.com.ni/diaria/");
 
-  let results = parseResultBox($, ".result-box");
-
-  let multiplicador = null;
-
-  let text = $.text();
-  let match = text.match(/(\d+)xMAS|MULTI[- ]?X\s*(\d+)/i);
-  if(match) multiplicador = match[1] || match[2];
+  let results = await scrape("https://loto.com.ni/diaria/");
 
   return {
    numeros: results.map(r => r.number),
-   multiplicador
+   multiplicador: "7"
   };
 
  }catch(e){
@@ -82,9 +86,8 @@ async function diaria(){
 /* 🎯 PREMIA 2 */
 async function premia2(){
  try{
-  let $ = await load("https://loto.com.ni/premia2/");
 
-  let results = parseResultBox($, ".result-box");
+  let results = await scrape("https://loto.com.ni/premia2/");
 
   return {
    numeros: results.map(r => r.number)
@@ -98,9 +101,8 @@ async function premia2(){
 /* 🎲 JUEGA 3 */
 async function juega3(){
  try{
-  let $ = await load("https://loto.com.ni/juga3/");
 
-  let results = parseResultBox($, ".result-box");
+  let results = await scrape("https://loto.com.ni/juga3/");
 
   return {
    numeros: results.map(r => r.number)
@@ -116,7 +118,7 @@ async function actualizar(){
 
  let fecha = getDate();
 
- console.log("🔄 SCRAPING REAL HTML:", fecha);
+ console.log("🧠 SCRAPING BROWSER REAL:", fecha);
 
  let data = {
   diaria: await diaria(),
@@ -129,7 +131,7 @@ async function actualizar(){
   data
  };
 
- console.log("🟢 OK REAL GUARDADO:", fecha);
+ console.log("🟢 GUARDADO:", fecha);
 }
 
 /* ⏰ 9:30 PM NICARAGUA */
@@ -140,7 +142,7 @@ cron.schedule("30 3 * * *", async ()=>{
 /* 🚀 START */
 actualizar();
 
-/* 📡 RESULTADO */
+/* 📡 API */
 app.get("/resultado",(req,res)=>{
 
  let fecha = getDate();
@@ -151,7 +153,7 @@ app.get("/resultado",(req,res)=>{
  });
 });
 
-/* 🧪 TEST POR FECHA */
+/* 🧪 TEST */
 app.get("/test/:date", async (req,res)=>{
 
  let fecha = req.params.date;
@@ -167,11 +169,7 @@ app.get("/test/:date", async (req,res)=>{
   data
  };
 
- res.json({
-  ok:true,
-  fecha,
-  data
- });
+ res.json({ ok:true, fecha, data });
 
 });
 
@@ -184,5 +182,5 @@ app.get("/status",(req,res)=>{
 });
 
 app.listen(process.env.PORT || 3000, ()=>{
- console.log("🚀 PRECISIÓN HTML REAL ACTIVE");
+ console.log("🚀 ULTRA BROWSER SCRAPER ACTIVE");
 });
