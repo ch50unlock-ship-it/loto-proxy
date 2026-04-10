@@ -7,36 +7,50 @@ const cron = require("node-cron");
 const app = express();
 app.use(cors({ origin: "*" }));
 
-/* 🧠 CACHE */
+/* 🧠 HISTORIAL POR FECHA */
 let cache = {
- fecha: null,
- data: null
+ fechas: {}
 };
 
+/* 📅 FECHA NICARAGUA */
+function getDate(){
+ return new Date().toLocaleDateString("en-CA", {
+  timeZone: "America/Managua"
+ });
+}
+
+/* 🧹 LIMPIEZA */
 function clean(t){
  return t.replace(/\s+/g,' ').trim();
 }
 
-/* 🔥 sacar hasta 4 resultados */
-function extraer(text, regex){
- let m = [...text.matchAll(regex)];
- return m.map(x => x[1]).slice(0,4);
+/* 🌐 CARGAR HTML */
+async function load(url){
+ let res = await axios.get(url);
+ return cheerio.load(res.data);
 }
 
-/* 🎰 DIARIA */
+/* 🔥 EXTRAER 4 RESULTADOS */
+function extract(text, regex){
+ let m = [...text.matchAll(regex)];
+ return m.map(x => x[1]).slice(-4);
+}
+
+/* 🎰 DIARIA (con MULTIPLICADOR X) */
 async function diaria(){
  try{
-  let res = await axios.get("https://loto.com.ni/diaria/");
-  let $ = cheerio.load(res.data);
-  let text = clean($("body").text());
+  let $ = await load("https://loto.com.ni/diaria/");
+  let text = clean($.text());
 
-  let numeros = extraer(text, /#\d+\s*(\d{1,2})/g);
+  let numeros = extract(text, /#\d+\s*(\d{1,2})/g);
+
   let multi = text.match(/(\d+)xMAS|MULTI[- ]?X\s*(\d+)/i);
 
   return {
    numeros,
    multiplicador: multi ? (multi[1] || multi[2]) : null
   };
+
  }catch(e){
   return { error:true };
  }
@@ -45,13 +59,13 @@ async function diaria(){
 /* 🎯 PREMIA 2 */
 async function premia2(){
  try{
-  let res = await axios.get("https://loto.com.ni/premia2/");
-  let $ = cheerio.load(res.data);
-  let text = clean($("body").text());
+  let $ = await load("https://loto.com.ni/premia2/");
+  let text = clean($.text());
 
-  let numeros = extraer(text, /#\d+\s*(\d{4})/g);
+  let numeros = extract(text, /#\d+\s*(\d{4})/g);
 
   return { numeros };
+
  }catch(e){
   return { error:true };
  }
@@ -60,55 +74,68 @@ async function premia2(){
 /* 🎲 JUEGA 3 */
 async function juega3(){
  try{
-  let res = await axios.get("https://loto.com.ni/juga3/");
-  let $ = cheerio.load(res.data);
-  let text = clean($("body").text());
+  let $ = await load("https://loto.com.ni/juga3/");
+  let text = clean($.text());
 
-  let numeros = extraer(text, /#\d+\s*(\d{3})/g);
+  let numeros = extract(text, /#\d+\s*(\d{3})/g);
 
   return { numeros };
+
  }catch(e){
   return { error:true };
  }
 }
 
-/* 🔄 ACTUALIZAR */
+/* 🔄 ACTUALIZAR DÍA */
 async function actualizar(){
 
- console.log("🔄 Actualizando LOTO...");
+ let fecha = getDate();
 
- let d = await diaria();
- let p = await premia2();
- let j = await juega3();
+ console.log("🔄 Actualizando LOTO:", fecha);
 
- cache = {
-  fecha: new Date().toISOString().split("T")[0],
-  data: {
-   diaria: d,
-   premia2: p,
-   juega3: j
-  }
+ let data = {
+  diaria: await diaria(),
+  premia2: await premia2(),
+  juega3: await juega3()
  };
 
- console.log("🟢 CACHE OK");
+ cache.fechas[fecha] = {
+  fecha,
+  data
+ };
+
+ console.log("🟢 Guardado día:", fecha);
 }
 
-/* ⏰ 9:30 PM NICARAGUA (3:30 AM UTC) */
-cron.schedule("30 3 * * *", async ()=>{
+/* ⏰ 9:30 PM NICARAGUA */
+cron.schedule("30 3 * * *", async () => {
  await actualizar();
 });
 
 /* 📡 API */
 app.get("/resultado",(req,res)=>{
+
+ let fecha = getDate();
+
+ res.json({
+  fecha,
+  data: cache.fechas[fecha] || null
+ });
+});
+
+/* 📊 HISTORIAL */
+app.get("/historial",(req,res)=>{
  res.json(cache);
 });
 
-/* STATUS */
+/* 🔥 STATUS */
 app.get("/status",(req,res)=>{
- res.json({ ok:true, cache });
+ res.json({
+  ok:true,
+  diasGuardados: Object.keys(cache.fechas).length
+ });
 });
 
 app.listen(process.env.PORT || 3000, ()=>{
- console.log("🚀 LOTO SERVER ON");
+ console.log("🚀 LOTO PRO SERVER READY");
 });
-actualizar();
