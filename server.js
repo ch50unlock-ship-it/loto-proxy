@@ -7,7 +7,7 @@ const cron = require("node-cron");
 const app = express();
 app.use(cors({ origin: "*" }));
 
-/* 🧠 CACHE */
+/* 🧠 CACHE POR FECHA */
 let cache = {
  fechas: {}
 };
@@ -25,30 +25,49 @@ async function load(url){
  return cheerio.load(res.data);
 }
 
-/* 🧹 CLEAN */
+/* 🧹 LIMPIEZA FUERTE */
 function clean(t){
  return t.replace(/\s+/g,' ').trim();
 }
 
-/* 🔥 EXTRACT 4 VALID RESULTS */
-function extract(text, regex){
- let matches = [...text.matchAll(regex)]
-  .map(m => m[1])
-  .filter(v => v && v !== "0" && v !== "0000")
-  .slice(0,4);
+/* 🔥 SOLO BLOQUES REALES DE RESULTADOS */
+function getBlocks($){
+ let blocks = [];
 
- return matches;
+ $("*").each((i,el)=>{
+  let t = $(el).text();
+
+  // solo líneas que parecen resultados reales
+  if(/#\d+/.test(t) && t.length < 200){
+   blocks.push(clean(t));
+  }
+ });
+
+ return blocks;
+}
+
+/* 🎯 EXTRAER ÚLTIMOS 4 LIMPIOS */
+function extractNumbers(blocks, regex, size){
+ return blocks
+  .map(b => (b.match(regex) || [])[1])
+  .filter(v =>
+   v &&
+   v !== "0" &&
+   v !== "000" &&
+   v !== "0000"
+  )
+  .slice(0, size);
 }
 
 /* 🎰 DIARIA */
 async function diaria(){
  try{
   let $ = await load("https://loto.com.ni/diaria/");
-  let text = clean($.text());
+  let blocks = getBlocks($);
 
-  let numeros = extract(text, /#\d+\s*(\d{1,2})/g);
+  let numeros = extractNumbers(blocks, /(\d{1,2})/, 4);
 
-  let multi = text.match(/(\d+)xMAS|MULTI[- ]?X\s*(\d+)/i);
+  let multi = blocks[0]?.match(/(\d+)xMAS|MULTI[- ]?X\s*(\d+)/i);
 
   return {
    numeros,
@@ -64,9 +83,9 @@ async function diaria(){
 async function premia2(){
  try{
   let $ = await load("https://loto.com.ni/premia2/");
-  let text = clean($.text());
+  let blocks = getBlocks($);
 
-  let numeros = extract(text, /#\d+\s*(\d{4})/g);
+  let numeros = extractNumbers(blocks, /(\d{4})/, 4);
 
   return { numeros };
 
@@ -79,9 +98,9 @@ async function premia2(){
 async function juega3(){
  try{
   let $ = await load("https://loto.com.ni/juga3/");
-  let text = clean($.text());
+  let blocks = getBlocks($);
 
-  let numeros = extract(text, /#\d+\s*(\d{3})/g);
+  let numeros = extractNumbers(blocks, /(\d{3})/, 4);
 
   return { numeros };
 
@@ -90,12 +109,12 @@ async function juega3(){
  }
 }
 
-/* 🔄 ACTUALIZAR */
+/* 🔄 ACTUALIZAR DÍA */
 async function actualizar(){
 
  let fecha = getDate();
 
- console.log("🔄 ACTUALIZANDO:", fecha);
+ console.log("🔄 PRECISIÓN TOTAL:", fecha);
 
  let data = {
   diaria: await diaria(),
@@ -108,18 +127,18 @@ async function actualizar(){
   data
  };
 
- console.log("🟢 GUARDADO:", fecha);
+ console.log("🟢 OK GUARDADO:", fecha);
 }
 
 /* ⏰ 9:30 PM NICARAGUA */
-cron.schedule("30 3 * * *", async () => {
+cron.schedule("30 3 * * *", async ()=>{
  await actualizar();
 });
 
-/* 🚀 START AUTO */
+/* 🚀 AUTO START */
 actualizar();
 
-/* 📡 RESULTADO (día actual) */
+/* 📡 RESULTADO DÍA ACTUAL */
 app.get("/resultado",(req,res)=>{
 
  let fecha = getDate();
@@ -130,12 +149,12 @@ app.get("/resultado",(req,res)=>{
  });
 });
 
-/* 🧪 TEST POR FECHA (IMPORTANTE) */
+/* 🧪 TEST POR FECHA */
 app.get("/test/:date", async (req,res)=>{
 
  let fecha = req.params.date;
 
- console.log("🧪 TEST:", fecha);
+ console.log("🧪 TEST PRECISIÓN:", fecha);
 
  let data = {
   diaria: await diaria(),
@@ -165,10 +184,10 @@ app.get("/historial",(req,res)=>{
 app.get("/status",(req,res)=>{
  res.json({
   ok:true,
-  dias: Object.keys(cache.fechas)
+  dias: Object.keys(cache.fechas).length
  });
 });
 
 app.listen(process.env.PORT || 3000, ()=>{
- console.log("🚀 LOTO PRO FINAL ACTIVE");
+ console.log("🚀 PRECISIÓN TOTAL LOTO PRO ACTIVE");
 });
