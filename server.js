@@ -7,7 +7,7 @@ const cron = require("node-cron");
 const app = express();
 app.use(cors({ origin: "*" }));
 
-/* 🧠 CACHE POR FECHA */
+/* 🧠 CACHE */
 let cache = {
  fechas: {}
 };
@@ -19,59 +19,59 @@ function getDate(){
  });
 }
 
-/* 🌐 LOAD HTML */
+/* 🌐 LOAD */
 async function load(url){
  let res = await axios.get(url);
  return cheerio.load(res.data);
 }
 
-/* 🧹 LIMPIEZA FUERTE */
-function clean(t){
- return t.replace(/\s+/g,' ').trim();
-}
+/* 🔥 EXTRAER POR BLOQUES REALES */
+function parseResultBox($, selector){
 
-/* 🔥 SOLO BLOQUES REALES DE RESULTADOS */
-function getBlocks($){
- let blocks = [];
+ let results = [];
 
- $("*").each((i,el)=>{
-  let t = $(el).text();
+ $(selector).each((i,el)=>{
 
-  // solo líneas que parecen resultados reales
-  if(/#\d+/.test(t) && t.length < 200){
-   blocks.push(clean(t));
+  let date = $(el).find(".draw-date").text().trim();
+  let time = $(el).find(".draw-time").text().trim();
+  let id = $(el).find(".draw-id").text().trim();
+
+  let digits = [];
+
+  $(el).find(".digit").each((i,d)=>{
+   digits.push($(d).text().trim());
+  });
+
+  if(digits.length > 0){
+   results.push({
+    date,
+    time,
+    id,
+    number: digits.join("")
+   });
   }
+
  });
 
- return blocks;
-}
-
-/* 🎯 EXTRAER ÚLTIMOS 4 LIMPIOS */
-function extractNumbers(blocks, regex, size){
- return blocks
-  .map(b => (b.match(regex) || [])[1])
-  .filter(v =>
-   v &&
-   v !== "0" &&
-   v !== "000" &&
-   v !== "0000"
-  )
-  .slice(0, size);
+ return results.slice(0,4);
 }
 
 /* 🎰 DIARIA */
 async function diaria(){
  try{
   let $ = await load("https://loto.com.ni/diaria/");
-  let blocks = getBlocks($);
 
-  let numeros = extractNumbers(blocks, /(\d{1,2})/, 4);
+  let results = parseResultBox($, ".result-box");
 
-  let multi = blocks[0]?.match(/(\d+)xMAS|MULTI[- ]?X\s*(\d+)/i);
+  let multiplicador = null;
+
+  let text = $.text();
+  let match = text.match(/(\d+)xMAS|MULTI[- ]?X\s*(\d+)/i);
+  if(match) multiplicador = match[1] || match[2];
 
   return {
-   numeros,
-   multiplicador: multi ? (multi[1] || multi[2]) : null
+   numeros: results.map(r => r.number),
+   multiplicador
   };
 
  }catch(e){
@@ -83,11 +83,12 @@ async function diaria(){
 async function premia2(){
  try{
   let $ = await load("https://loto.com.ni/premia2/");
-  let blocks = getBlocks($);
 
-  let numeros = extractNumbers(blocks, /(\d{4})/, 4);
+  let results = parseResultBox($, ".result-box");
 
-  return { numeros };
+  return {
+   numeros: results.map(r => r.number)
+  };
 
  }catch(e){
   return { error:true };
@@ -98,23 +99,24 @@ async function premia2(){
 async function juega3(){
  try{
   let $ = await load("https://loto.com.ni/juga3/");
-  let blocks = getBlocks($);
 
-  let numeros = extractNumbers(blocks, /(\d{3})/, 4);
+  let results = parseResultBox($, ".result-box");
 
-  return { numeros };
+  return {
+   numeros: results.map(r => r.number)
+  };
 
  }catch(e){
   return { error:true };
  }
 }
 
-/* 🔄 ACTUALIZAR DÍA */
+/* 🔄 ACTUALIZAR */
 async function actualizar(){
 
  let fecha = getDate();
 
- console.log("🔄 PRECISIÓN TOTAL:", fecha);
+ console.log("🔄 SCRAPING REAL HTML:", fecha);
 
  let data = {
   diaria: await diaria(),
@@ -127,7 +129,7 @@ async function actualizar(){
   data
  };
 
- console.log("🟢 OK GUARDADO:", fecha);
+ console.log("🟢 OK REAL GUARDADO:", fecha);
 }
 
 /* ⏰ 9:30 PM NICARAGUA */
@@ -135,10 +137,10 @@ cron.schedule("30 3 * * *", async ()=>{
  await actualizar();
 });
 
-/* 🚀 AUTO START */
+/* 🚀 START */
 actualizar();
 
-/* 📡 RESULTADO DÍA ACTUAL */
+/* 📡 RESULTADO */
 app.get("/resultado",(req,res)=>{
 
  let fecha = getDate();
@@ -154,8 +156,6 @@ app.get("/test/:date", async (req,res)=>{
 
  let fecha = req.params.date;
 
- console.log("🧪 TEST PRECISIÓN:", fecha);
-
  let data = {
   diaria: await diaria(),
   premia2: await premia2(),
@@ -175,12 +175,7 @@ app.get("/test/:date", async (req,res)=>{
 
 });
 
-/* 📊 HISTORIAL */
-app.get("/historial",(req,res)=>{
- res.json(cache);
-});
-
-/* 🔥 STATUS */
+/* 📊 STATUS */
 app.get("/status",(req,res)=>{
  res.json({
   ok:true,
@@ -189,5 +184,5 @@ app.get("/status",(req,res)=>{
 });
 
 app.listen(process.env.PORT || 3000, ()=>{
- console.log("🚀 PRECISIÓN TOTAL LOTO PRO ACTIVE");
+ console.log("🚀 PRECISIÓN HTML REAL ACTIVE");
 });
