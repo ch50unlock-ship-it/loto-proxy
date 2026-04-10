@@ -17,7 +17,7 @@ function getDate(){
  });
 }
 
-/* 🧠 BROWSER SAFE SCRAPER */
+/* 🧠 SCRAPER ROBUSTO (SIN DEPENDER DE CLASES) */
 async function scrape(url){
 
  let browser = null;
@@ -31,35 +31,33 @@ async function scrape(url){
 
   const page = await browser.newPage();
 
-  await page.goto(url, { waitUntil: "networkidle" });
+  await page.goto(url, { waitUntil: "domcontentloaded" });
 
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(5000);
 
-  const results = await page.evaluate(() => {
+  const data = await page.evaluate(() => {
 
-   let boxes = document.querySelectorAll(".result-box");
+   let text = document.body.innerText;
 
-   let data = [];
+   // buscar números de 3 o 4 dígitos en toda la página
+   let matches = text.match(/\b\d{3,4}\b/g);
 
-   boxes.forEach(b => {
+   if(!matches) return [];
 
-    let digits = [...b.querySelectorAll(".digit")]
-      .map(d => d.innerText.trim())
-      .join("");
+   let clean = [...new Set(matches)]
+    .filter(n =>
+      n !== "0000" &&
+      n !== "000" &&
+      n.length >= 3
+    );
 
-    if(digits){
-     data.push(digits);
-    }
-
-   });
-
-   return data.slice(0,4);
+   return clean.slice(0,4);
 
   });
 
   await browser.close();
 
-  return results;
+  return data;
 
  }catch(e){
 
@@ -84,21 +82,27 @@ async function diaria(){
 /* 🎯 PREMIA 2 */
 async function premia2(){
  let numeros = await scrape("https://loto.com.ni/premia2/");
- return { numeros };
+
+ return {
+  numeros
+ };
 }
 
 /* 🎲 JUEGA 3 */
 async function juega3(){
  let numeros = await scrape("https://loto.com.ni/juga3/");
- return { numeros };
+
+ return {
+  numeros
+ };
 }
 
-/* 🔄 ACTUALIZAR (SOLO MANUAL / CRON) */
+/* 🔄 ACTUALIZAR CACHE */
 async function actualizar(){
 
  let fecha = getDate();
 
- console.log("🔄 UPDATE:", fecha);
+ console.log("🔄 SCRAPING ROBUSTO:", fecha);
 
  let data = {
   diaria: await diaria(),
@@ -111,7 +115,7 @@ async function actualizar(){
   data
  };
 
- console.log("🟢 GUARDADO:", fecha);
+ console.log("🟢 GUARDADO OK:", fecha);
 }
 
 /* ⏰ 9:30 PM NICARAGUA */
@@ -119,7 +123,7 @@ cron.schedule("30 3 * * *", async ()=>{
  await actualizar();
 });
 
-/* 🚀 API */
+/* 🚀 API RESULTADO */
 app.get("/resultado",(req,res)=>{
 
  let fecha = getDate();
@@ -161,7 +165,7 @@ app.get("/status",(req,res)=>{
  });
 });
 
-/* 🚀 START SERVER (NO CRASH) */
+/* 🚀 START SERVER */
 app.listen(process.env.PORT || 3000, ()=>{
- console.log("🚀 LOTO STABLE SERVER RUNNING");
+ console.log("🚀 LOTO ROBUST SCRAPER ONLINE");
 });
