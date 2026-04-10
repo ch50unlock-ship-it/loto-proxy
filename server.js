@@ -17,108 +17,88 @@ function getDate(){
  });
 }
 
-/* 🔥 BROWSER SCRAPER REAL */
+/* 🧠 BROWSER SAFE SCRAPER */
 async function scrape(url){
 
- const browser = await chromium.launch({
-  headless: true
- });
+ let browser = null;
 
- const page = await browser.newPage();
+ try{
 
- await page.goto(url, { waitUntil: "networkidle" });
+  browser = await chromium.launch({
+   headless: true,
+   args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  });
 
- // esperar render completo
- await page.waitForTimeout(3000);
+  const page = await browser.newPage();
 
- const data = await page.evaluate(() => {
+  await page.goto(url, { waitUntil: "networkidle" });
 
-  function getBoxes(){
+  await page.waitForTimeout(2500);
+
+  const results = await page.evaluate(() => {
 
    let boxes = document.querySelectorAll(".result-box");
 
-   let results = [];
+   let data = [];
 
    boxes.forEach(b => {
-
-    let date = b.querySelector(".draw-date")?.innerText || "";
-    let time = b.querySelector(".draw-time")?.innerText || "";
-    let id = b.querySelector(".draw-id")?.innerText || "";
 
     let digits = [...b.querySelectorAll(".digit")]
       .map(d => d.innerText.trim())
       .join("");
 
     if(digits){
-     results.push({ date, time, id, number: digits });
+     data.push(digits);
     }
 
    });
 
-   return results;
-  }
+   return data.slice(0,4);
 
-  return getBoxes();
+  });
 
- });
+  await browser.close();
 
- await browser.close();
+  return results;
 
- return data.slice(0,4);
+ }catch(e){
+
+  if(browser) await browser.close();
+
+  console.log("❌ SCRAPER ERROR:", e.message);
+
+  return [];
+ }
 }
 
 /* 🎰 DIARIA */
 async function diaria(){
- try{
+ let numeros = await scrape("https://loto.com.ni/diaria/");
 
-  let results = await scrape("https://loto.com.ni/diaria/");
-
-  return {
-   numeros: results.map(r => r.number),
-   multiplicador: "7"
-  };
-
- }catch(e){
-  return { error:true };
- }
+ return {
+  numeros,
+  multiplicador: "7"
+ };
 }
 
 /* 🎯 PREMIA 2 */
 async function premia2(){
- try{
-
-  let results = await scrape("https://loto.com.ni/premia2/");
-
-  return {
-   numeros: results.map(r => r.number)
-  };
-
- }catch(e){
-  return { error:true };
- }
+ let numeros = await scrape("https://loto.com.ni/premia2/");
+ return { numeros };
 }
 
 /* 🎲 JUEGA 3 */
 async function juega3(){
- try{
-
-  let results = await scrape("https://loto.com.ni/juga3/");
-
-  return {
-   numeros: results.map(r => r.number)
-  };
-
- }catch(e){
-  return { error:true };
- }
+ let numeros = await scrape("https://loto.com.ni/juga3/");
+ return { numeros };
 }
 
-/* 🔄 ACTUALIZAR */
+/* 🔄 ACTUALIZAR (SOLO MANUAL / CRON) */
 async function actualizar(){
 
  let fecha = getDate();
 
- console.log("🧠 SCRAPING BROWSER REAL:", fecha);
+ console.log("🔄 UPDATE:", fecha);
 
  let data = {
   diaria: await diaria(),
@@ -139,10 +119,7 @@ cron.schedule("30 3 * * *", async ()=>{
  await actualizar();
 });
 
-/* 🚀 START */
-actualizar();
-
-/* 📡 API */
+/* 🚀 API */
 app.get("/resultado",(req,res)=>{
 
  let fecha = getDate();
@@ -169,8 +146,11 @@ app.get("/test/:date", async (req,res)=>{
   data
  };
 
- res.json({ ok:true, fecha, data });
-
+ res.json({
+  ok:true,
+  fecha,
+  data
+ });
 });
 
 /* 📊 STATUS */
@@ -181,6 +161,7 @@ app.get("/status",(req,res)=>{
  });
 });
 
+/* 🚀 START SERVER (NO CRASH) */
 app.listen(process.env.PORT || 3000, ()=>{
- console.log("🚀 ULTRA BROWSER SCRAPER ACTIVE");
+ console.log("🚀 LOTO STABLE SERVER RUNNING");
 });
