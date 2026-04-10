@@ -1,1 +1,1 @@
-# loto-proxy
+loto-bot/
